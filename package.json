@@ -1,0 +1,28 @@
+{
+  "name": "marza91",
+  "version": "1.0.0",
+  "description": "Simple & Safe node.js module for using a MySQL database",
+  "main": "main.js",
+  "scripts": {
+    "test": "make test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marza91/SimpleSave.git"
+  },
+  "keywords": [
+    "mysql",
+    "simple",
+    "safe"
+  ],
+  "author": "Martin Vaaden <mavaaden@gmail.com> (http://www.raspianprime.com)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/marza91/SimpleSave/issues"
+  },
+  "homepage": "https://github.com/marza91/SimpleSave#readme",
+  "devDependencies": {
+    "chai": "^3.4.1",
+    "mocha": "^2.3.4"
+  }
+}

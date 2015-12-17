@@ -6,15 +6,18 @@ var Helper = require("./helperfunctions.js");
 ///////////////////////////////////////////////////////////
 // Private vars
 var vConnection = null; // Mysql Connection object
+var vConnectionOptions = null; // Connection options for reference
 var vTableList = null; // List of available tables
+var vTableColumns = {}; // List of table columns
 var vExports = {}; // Exported at the end
 
 ///////////////////////////////////////////////////////////
 // Available functions
 
 vExports.Connect = function(pOptions, pCallBack) {
+	vConnectionOptions = pOptions;
 	vExports.Close();
-	vConnection = MySQL.createConnection(pOptions);
+	vConnection = MySQL.createConnection(vConnectionOptions);
 
 	vConnection.connect(function(pError){
 		if(pError){
@@ -26,27 +29,44 @@ vExports.Connect = function(pOptions, pCallBack) {
 }
 
 vExports.Select = function(pTable, pColumns, pCallBack){
-	var vColumns = [], vTable = "";
-	if(pColumns === "*"){
-		vColumns = ["*"];
-	}else {
-		throw new Error("Not implemented column level select");
-		// TODO: Implement column level selects...
-	}
-
 	GetTableList(function(){
 		vTableName = Helper.VerifyField(pTable, vTableList);
+		if(!vTableName) throw new Error("Invalid table name!");
 
-		// TODO: Run the actual select
-		Query("SELECT * FROM " + vTableName, function(pRows, pFields){
-			pRows.forEach(function(pRow, pRowIndex){
-				pFields.forEach(function(pColumn, pColumnIndex){
-					console.log(pColumn.name + ": " + pRow[pColumn.name]);
+		if(pColumns === "*"){
+			Query("SELECT * FROM " + vTableName, pCallBack);
+		}else{
+			if(typeof pColumns === "string") {
+				pColumns = [pColumns];
+			}
+
+			GetColumList(vTableName, function(){
+				var vColumns = [];
+				pColumns.forEach(function(pColumn){
+					var vColumn = Helper.VerifyField(pColumn, vTableColumns[vTableName]);
+					if(!vColumn) throw new Error("Invalid column!")
+					vColumns[vColumns.length] = vColumn;
 				});
-			})
-			pCallBack();
-		});
+				Query("SELECT " + vColumns.join(", ") + " FROM " + vTableName, pCallBack);
+			});
+		}
 	});
+}
+
+vExports.Insert = function(pTable){
+	throw new Error("Not implemented!")
+}
+
+vExports.Update = function(pTable){
+	throw new Error("Not implemented!")
+}
+
+vExports.Delete = function(pTable){
+	throw new Error("Not implemented!")
+}
+
+vExports.Execute = function(pProcedure){
+	throw new Error("Not implemented!")
 }
 
 vExports.Close = function(){
@@ -76,6 +96,24 @@ function GetTableList(pCallBack){
 	}
 }
 
+function GetColumList(pTable, pCallBack){
+	if(vTableColumns[pTable]){
+		pCallBack();
+	}else {
+		Query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '" +
+	 			vConnectionOptions.database + "' AND `TABLE_NAME`='" + pTable + "';", function(pRows, pFields){
+
+			vDef = [];
+			pRows.forEach(function(pRow, pRowIndex){
+				vDef[vDef.length] = pRow.COLUMN_NAME;
+			});
+			vTableColumns[pTable] = vDef;
+			pCallBack();
+		});
+
+	}
+}
+
 function Query(pQuery, pCallBack){
 	vConnection.query(pQuery, function(pError, pRows, pFields){
 		if(pError){
@@ -88,10 +126,10 @@ function Query(pQuery, pCallBack){
 
 // TODO: Finish this function
 function RowLoop(pRows, pFields, pFunction){
+	pFields.forEach(function(pColumn, pColumnIndex){
+	});
 	pRows.forEach(function(pRow, pRowIndex){
-		pFields.forEach(function(pColumn, pColumnIndex){
-			pFunction(pRow, pColumn.name);
-		});
+		pFunction(pRow, pColumn.name);
 	})
 }
 

@@ -13,10 +13,12 @@ vTestConnection.Connect({
 }, function(pStatus){
 	expect(pStatus).to.equal("success");
 
-	vTestConnection.Select("secv_myuser", "*", function(pFields){
-
-		console.log(pFields);
-
+	vTestConnection.Select("secv_myuser", "*", function(pRows, pFields){
+		pRows.forEach(function(pRow, pRowIndex){
+			pFields.forEach(function(pColumn, pColumnIndex){
+				console.log(pColumn.name + ": " + pRow[pColumn.name]);
+			});
+		})
 		vTestConnection.Close();
 	});
 });

@@ -53,8 +53,37 @@ vExports.Select = function(pTable, pColumns, pCallBack){
 	});
 }
 
-vExports.Insert = function(pTable){
-	throw new Error("Not implemented!")
+vExports.Insert = function(pTable, pData, pCallBack){
+	GetTableList(function(){
+		vTableName = Helper.VerifyField(pTable, vTableList);
+		if(!vTableName) throw new Error("Invalid table name!");
+
+		GetColumList(vTableName, function(){
+			/*vData = {
+				name: "my project",
+				description: "hahahaha"
+			}*/
+
+			var vKeys = Object.keys(pData);
+
+			var vColumns = [];
+			vKeys.forEach(function(pColumn){
+				var vColumn = Helper.VerifyField(pColumn, vTableColumns[vTableName]);
+				if(!vColumn) throw new Error("Invalid column!")
+				vColumns[vColumns.length] = vColumn;
+			});
+			//TODO: Verify/sanitize data
+			var vData = [];
+			vColumns.forEach(function(pColumn){
+				vData[vData.length] = pData[pColumn];
+			});
+
+			var sql = "INSERT INTO " + vTableName + "(" + vColumns.join(", ") + ")" +
+						"VALUES('" + vData.join("', '") + "')";
+
+			Query(sql, pCallBack);
+		});
+	});
 }
 
 vExports.Update = function(pTable){
@@ -83,10 +112,9 @@ function GetTableList(pCallBack){
 		Query("SHOW TABLES", function(pResultSet){
 			vTableList = [];
 
-			//TODO: Use RowLoop function
 			pResultSet.Rows.forEach(function(pRow, pRowIndex){
-				pResultSet.Fields.forEach(function(pColumn, pColumnIndex){
-					vTableList[vTableList.length] = pRow[pColumn.name];
+				pResultSet.Columns.forEach(function(pColumn, pColumnIndex){
+					vTableList[vTableList.length] = pRow[pColumn]; //Column name will be like "Tables_in_tablename"
 				});
 			})
 			if(pCallBack)pCallBack();
@@ -119,20 +147,20 @@ function Query(pQuery, pCallBack){
 		if(pError){
 			throw new Error("Table listing error: " + pError);
 		}
-		pCallBack({
-			Fields: pFields,
-			Rows: pRows
+		pCallBack(CreateResultSet(pRows, pFields));
+	});
+}
+
+function CreateResultSet(pRows, pFields){
+	var vRS = {
+		Rows: pRows,
+		Columns: []
+	}
+	if(pFields){
+		pFields.forEach(function(pColumn, pColumnIndex){
+			vRS.Columns[vRS.Columns.length] = pColumn.name;
 		});
-	});
+	}
+	return vRS;
 }
-
-// TODO: Finish this function
-function RowLoop(pRows, pFields, pFunction){
-	pFields.forEach(function(pColumn, pColumnIndex){
-	});
-	pRows.forEach(function(pRow, pRowIndex){
-		pFunction(pRow, pColumn.name);
-	})
-}
-
 module.exports = vExports;

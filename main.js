@@ -80,12 +80,12 @@ vExports.Close = function(){
 // Private functions
 function GetTableList(pCallBack){
 	if(!vTableList){
-		Query("SHOW TABLES", function(pRows, pFields){
+		Query("SHOW TABLES", function(pResultSet){
 			vTableList = [];
 
 			//TODO: Use RowLoop function
-			pRows.forEach(function(pRow, pRowIndex){
-				pFields.forEach(function(pColumn, pColumnIndex){
+			pResultSet.Rows.forEach(function(pRow, pRowIndex){
+				pResultSet.Fields.forEach(function(pColumn, pColumnIndex){
 					vTableList[vTableList.length] = pRow[pColumn.name];
 				});
 			})
@@ -101,10 +101,10 @@ function GetColumList(pTable, pCallBack){
 		pCallBack();
 	}else {
 		Query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '" +
-	 			vConnectionOptions.database + "' AND `TABLE_NAME`='" + pTable + "';", function(pRows, pFields){
+	 			vConnectionOptions.database + "' AND `TABLE_NAME`='" + pTable + "';", function(pResultSet){
 
 			vDef = [];
-			pRows.forEach(function(pRow, pRowIndex){
+			pResultSet.Rows.forEach(function(pRow, pRowIndex){
 				vDef[vDef.length] = pRow.COLUMN_NAME;
 			});
 			vTableColumns[pTable] = vDef;
@@ -119,8 +119,10 @@ function Query(pQuery, pCallBack){
 		if(pError){
 			throw new Error("Table listing error: " + pError);
 		}
-
-		pCallBack(pRows, pFields);
+		pCallBack({
+			Fields: pFields,
+			Rows: pRows
+		});
 	});
 }
 

@@ -10,7 +10,6 @@ module.exports = {
 	},
 
 	VerifyOperator: function(pOperator){
-		//"=; <; >; <>; <=; >=; LIKE; IS NULL; IS NOT NULL;"
 		switch (pOperator) {
 			case "=":
 				return "=";

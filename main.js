@@ -222,9 +222,6 @@ function CreateResultSet(pRows, pFields){
 }
 
 function FormatFilter(pTableName, pFilter, pRecurse){
-	// "ColA = 1 AND (ColB LIKE '%test%' OR ColC LIKE '%test%')"
-	//"=; <; >; <>;0 <=; >=; LIKE; IS NULL; IS NOT NULL;"
-
 	if(pFilter.Column){
 		vColumn = Helper.VerifyField(pFilter.Column, vTableColumns[pTableName]);
 		if(!vColumn) throw new Error("Invalid column!");

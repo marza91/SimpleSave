@@ -14,87 +14,143 @@ var vExports = {}; // Exported at the end
 ///////////////////////////////////////////////////////////
 // Available functions
 
-vExports.Connect = function(pOptions, pCallBack) {
+vExports.Connect = function(pOptions, pCallBackSuccess, pCallBackError) {
 	vConnectionOptions = pOptions;
 	vExports.Close();
 	vConnection = MySQL.createConnection(vConnectionOptions);
 
 	vConnection.connect(function(pError){
 		if(pError){
-			throw new Error("Connection error: " + pError);
+			pCallBackError("Connection error: " + pError);
 		}
 
-		pCallBack("success");
+		pCallBackSuccess("success");
 	});
 }
 
-vExports.Select = function(pTable, pColumns, pCallBack){
+vExports.Select = function(pTable, pColumns, pFilter, pCallBackSuccess, pCallBackError){
 	GetTableList(function(){
 		vTableName = Helper.VerifyField(pTable, vTableList);
-		if(!vTableName) throw new Error("Invalid table name!");
+		if(!vTableName) return pCallBackError("Invalid table name!");
 
-		if(pColumns === "*"){
-			Query("SELECT * FROM " + vTableName, pCallBack);
-		}else{
-			if(typeof pColumns === "string") {
-				pColumns = [pColumns];
+		GetColumList(vTableName, function(){
+			var vFilter = "";
+			if(pFilter){
+				try {
+					vFilter = " WHERE " + FormatFilter(vTableName, pFilter);
+				} catch (e) {
+					return pCallBackError(e);
+				}
 			}
 
-			GetColumList(vTableName, function(){
+
+			if(pColumns === "*"){
+				Query("SELECT * FROM " + vTableName + vFilter, pCallBackSuccess, pCallBackError);
+
+			}else {
+				if(typeof pColumns === "string") {
+					pColumns = [pColumns];
+				}
+
 				var vColumns = [];
 				pColumns.forEach(function(pColumn){
 					var vColumn = Helper.VerifyField(pColumn, vTableColumns[vTableName]);
-					if(!vColumn) throw new Error("Invalid column!")
+					if(!vColumn) return pCallBackError("Invalid column!");
 					vColumns[vColumns.length] = vColumn;
 				});
-				Query("SELECT " + vColumns.join(", ") + " FROM " + vTableName, pCallBack);
-			});
-		}
+				Query("SELECT " + vColumns.join(", ") + " FROM " + vTableName + vFilter, pCallBackSuccess, pCallBackError);
+			}
+		});
 	});
 }
 
-vExports.Insert = function(pTable, pData, pCallBack){
+vExports.Insert = function(pTable, pData, pCallBackSuccess, pCallBackError){
 	GetTableList(function(){
 		vTableName = Helper.VerifyField(pTable, vTableList);
-		if(!vTableName) throw new Error("Invalid table name!");
+		if(!vTableName) return pCallBackError("Invalid table name!");
 
 		GetColumList(vTableName, function(){
-			/*vData = {
-				name: "my project",
-				description: "hahahaha"
-			}*/
 
 			var vKeys = Object.keys(pData);
 
 			var vColumns = [];
 			vKeys.forEach(function(pColumn){
 				var vColumn = Helper.VerifyField(pColumn, vTableColumns[vTableName]);
-				if(!vColumn) throw new Error("Invalid column!")
+				if(!vColumn) return pCallBackError("Invalid column!")
 				vColumns[vColumns.length] = vColumn;
 			});
-			//TODO: Verify/sanitize data
 			var vData = [];
 			vColumns.forEach(function(pColumn){
-				vData[vData.length] = pData[pColumn];
+				vData[vData.length] = vConnection.escape(pData[pColumn]);
 			});
 
 			var sql = "INSERT INTO " + vTableName + "(" + vColumns.join(", ") + ")" +
 						"VALUES('" + vData.join("', '") + "')";
 
-			Query(sql, pCallBack);
+			Query(sql, pCallBackSuccess, pCallBackError);
 		});
 	});
 }
 
-vExports.Update = function(pTable){
-	throw new Error("Not implemented!")
+vExports.Update = function(pTable, pData, pFilter, pCallBackSuccess, pCallBackError){
+	GetTableList(function(){
+		vTableName = Helper.VerifyField(pTable, vTableList);
+		if(!vTableName) return pCallBackError("Invalid table name!");
+
+		GetColumList(vTableName, function(){
+			var vFilter = "";
+			if(pFilter){
+				try {
+					vFilter = " WHERE " + FormatFilter(vTableName, pFilter);
+				} catch (e) {
+					return pCallBackError(e);
+				}
+			}else {
+				return pCallBackError("Please specify a where clause when updating");
+			}
+
+			var vQuery = "UPDATE " + vTableName + " SET ";
+			var vKeys = Object.keys(pData);
+			var vColumns = [];
+			for(var i = 0; i < vKeys.length; i++){
+				var vColumn = Helper.VerifyField(vKeys[i], vTableColumns[vTableName]);
+				if(!vColumn) return pCallBackError("Invalid column!")
+				vQuery += vColumn + " = " + vConnection.escape(pData[vColumn]);
+				if(i < vKeys.length-1) vQuery += ", "
+			}
+
+			vQuery += vFilter;
+
+			Query(vQuery, pCallBackSuccess, pCallBackError);
+		});
+	});
 }
 
-vExports.Delete = function(pTable){
-	throw new Error("Not implemented!")
+vExports.Delete = function(pTable, pFilter, pCallBackSuccess, pCallBackError){
+	GetTableList(function(){
+		vTableName = Helper.VerifyField(pTable, vTableList);
+		if(!vTableName) return pCallBackError("Invalid table name!");
+
+		GetColumList(vTableName, function(){
+			var vFilter = "";
+			if(pFilter){
+				try {
+					vFilter = " WHERE " + FormatFilter(vTableName, pFilter);
+				} catch (e) {
+					return pCallBackError(e);
+				}
+			}else {
+				return pCallBackError("Please specify a where clause when deleting");
+			}
+
+			var vQuery = "DELETE FROM " + vTableName + vFilter;
+
+			Query(vQuery, pCallBackSuccess, pCallBackError);
+		});
+	});
 }
 
-vExports.Execute = function(pProcedure){
+vExports.Execute = function(pProcedure, pCallBackSuccess, pCallBackError){
 	throw new Error("Not implemented!")
 }
 
@@ -107,7 +163,7 @@ vExports.Close = function(){
 
 ///////////////////////////////////////////////////////////
 // Private functions
-function GetTableList(pCallBack){
+function GetTableList(pCallBackSuccess){
 	if(!vTableList){
 		Query("SHOW TABLES", function(pResultSet){
 			vTableList = [];
@@ -117,16 +173,16 @@ function GetTableList(pCallBack){
 					vTableList[vTableList.length] = pRow[pColumn]; //Column name will be like "Tables_in_tablename"
 				});
 			})
-			if(pCallBack)pCallBack();
+			if(pCallBackSuccess)pCallBackSuccess();
 		});
 	}else{
-		if(pCallBack)pCallBack();
+		if(pCallBackSuccess)pCallBackSuccess();
 	}
 }
 
-function GetColumList(pTable, pCallBack){
+function GetColumList(pTable, pCallBackSuccess){
 	if(vTableColumns[pTable]){
-		pCallBack();
+		pCallBackSuccess();
 	}else {
 		Query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '" +
 	 			vConnectionOptions.database + "' AND `TABLE_NAME`='" + pTable + "';", function(pResultSet){
@@ -136,18 +192,19 @@ function GetColumList(pTable, pCallBack){
 				vDef[vDef.length] = pRow.COLUMN_NAME;
 			});
 			vTableColumns[pTable] = vDef;
-			pCallBack();
+			pCallBackSuccess();
 		});
 
 	}
 }
 
-function Query(pQuery, pCallBack){
+function Query(pQuery, pCallBackSuccess, pCallBackError){
 	vConnection.query(pQuery, function(pError, pRows, pFields){
 		if(pError){
-			throw new Error("Table listing error: " + pError);
+			pCallBackError("Table listing error: " + pError);
+		}else{
+			pCallBackSuccess(CreateResultSet(pRows, pFields));
 		}
-		pCallBack(CreateResultSet(pRows, pFields));
 	});
 }
 
@@ -162,5 +219,33 @@ function CreateResultSet(pRows, pFields){
 		});
 	}
 	return vRS;
+}
+
+function FormatFilter(pTableName, pFilter, pRecurse){
+	// "ColA = 1 AND (ColB LIKE '%test%' OR ColC LIKE '%test%')"
+	//"=; <; >; <>;0 <=; >=; LIKE; IS NULL; IS NOT NULL;"
+
+	if(pFilter.Column){
+		vColumn = Helper.VerifyField(pFilter.Column, vTableColumns[pTableName]);
+		if(!vColumn) throw new Error("Invalid column!");
+		vOperator = Helper.VerifyOperator(pFilter.Operator);
+		if(!vOperator) throw new Error("Invalid Operator!");
+		// Build string
+		return vColumn + " " + vOperator + " " + vConnection.escape(pFilter.Value);
+	}else if(pFilter.Combo){
+		if(!pRecurse) pRecurse = 0;
+		if(pRecurse > 100) throw new Error("Max amount of filter recursing reaced!");
+		pRecurse ++;
+		vCombo = Helper.VerifyCombo(pFilter.Combo);
+		// Recurse each
+		var vFilterString = "(";
+		for(var i = 0; i < pFilter.Items.length; i++){
+			vFilterString += FormatFilter(pTableName, pFilter.Items[i], pRecurse);
+			if(i < pFilter.Items.length-1) vFilterString += " " + vCombo + " ";
+		}
+		return vFilterString + ")";
+	}else{
+		throw new Error("Invalid filter!")
+	}
 }
 module.exports = vExports;

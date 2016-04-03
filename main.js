@@ -26,7 +26,7 @@ vExports.Connect = function(pOptions, pCallBackSuccess, pCallBackError) {
 
 		pCallBackSuccess("success");
 	});
-}
+};
 
 vExports.Select = function(pTable, pColumns, pFilter, pCallBackSuccess, pCallBackError){
 	GetTableList(function(){
@@ -62,7 +62,7 @@ vExports.Select = function(pTable, pColumns, pFilter, pCallBackSuccess, pCallBac
 			}
 		});
 	});
-}
+};
 
 vExports.Insert = function(pTable, pData, pCallBackSuccess, pCallBackError){
 	GetTableList(function(){
@@ -76,7 +76,7 @@ vExports.Insert = function(pTable, pData, pCallBackSuccess, pCallBackError){
 			var vColumns = [];
 			vKeys.forEach(function(pColumn){
 				var vColumn = Helper.VerifyField(pColumn, vTableColumns[vTableName]);
-				if(!vColumn) return pCallBackError("Invalid column!")
+				if(!vColumn) return pCallBackError("Invalid column!");
 				vColumns[vColumns.length] = vColumn;
 			});
 			var vData = [];
@@ -90,7 +90,7 @@ vExports.Insert = function(pTable, pData, pCallBackSuccess, pCallBackError){
 			Query(sql, pCallBackSuccess, pCallBackError);
 		});
 	});
-}
+};
 
 vExports.Update = function(pTable, pData, pFilter, pCallBackSuccess, pCallBackError){
 	GetTableList(function(){
@@ -114,9 +114,9 @@ vExports.Update = function(pTable, pData, pFilter, pCallBackSuccess, pCallBackEr
 			var vColumns = [];
 			for(var i = 0; i < vKeys.length; i++){
 				var vColumn = Helper.VerifyField(vKeys[i], vTableColumns[vTableName]);
-				if(!vColumn) return pCallBackError("Invalid column!")
+				if(!vColumn) return pCallBackError("Invalid column!");
 				vQuery += vColumn + " = " + vConnection.escape(pData[vColumn]);
-				if(i < vKeys.length-1) vQuery += ", "
+				if(i < vKeys.length-1) vQuery += ", ";
 			}
 
 			vQuery += vFilter;
@@ -124,7 +124,7 @@ vExports.Update = function(pTable, pData, pFilter, pCallBackSuccess, pCallBackEr
 			Query(vQuery, pCallBackSuccess, pCallBackError);
 		});
 	});
-}
+};
 
 vExports.Delete = function(pTable, pFilter, pCallBackSuccess, pCallBackError){
 	GetTableList(function(){
@@ -148,18 +148,18 @@ vExports.Delete = function(pTable, pFilter, pCallBackSuccess, pCallBackError){
 			Query(vQuery, pCallBackSuccess, pCallBackError);
 		});
 	});
-}
+};
 
 vExports.Execute = function(pProcedure, pCallBackSuccess, pCallBackError){
-	throw new Error("Not implemented!")
-}
+	throw new Error("Not implemented!");
+};
 
 vExports.Close = function(){
 	if(vConnection){
 		vConnection.end();
 		vConnection = null;
 	}
-}
+};
 
 ///////////////////////////////////////////////////////////
 // Private functions
@@ -172,7 +172,7 @@ function GetTableList(pCallBackSuccess){
 				pResultSet.Columns.forEach(function(pColumn, pColumnIndex){
 					vTableList[vTableList.length] = pRow[pColumn]; //Column name will be like "Tables_in_tablename"
 				});
-			})
+			});
 			if(pCallBackSuccess)pCallBackSuccess();
 		});
 	}else{
@@ -212,7 +212,7 @@ function CreateResultSet(pRows, pFields){
 	var vRS = {
 		Rows: pRows,
 		Columns: []
-	}
+	};
 	if(pFields){
 		pFields.forEach(function(pColumn, pColumnIndex){
 			vRS.Columns[vRS.Columns.length] = pColumn.name;
@@ -242,7 +242,7 @@ function FormatFilter(pTableName, pFilter, pRecurse){
 		}
 		return vFilterString + ")";
 	}else{
-		throw new Error("Invalid filter!")
+		throw new Error("Invalid filter!");
 	}
 }
 module.exports = vExports;

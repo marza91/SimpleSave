@@ -4,40 +4,66 @@ var MySQL = require("mysql");
 var Helper = require("./helperfunctions.js");
 
 ///////////////////////////////////////////////////////////
-// Private vars
-var vConnection = null; // Mysql Connection object
-var vConnectionOptions = null; // Connection options for reference
-var vTableList = null; // List of available tables
-var vTableColumns = {}; // List of table columns
-var vExports = {}; // Exported at the end
+// Static vars
+var ActiveConnections = [];
 
 ///////////////////////////////////////////////////////////
-// Available functions
+// Connection prototype
+function SimSaveConnection(pOptions){
+	var priv = {
+	 	connection : null, // Mysql Connection object
+		options : pOptions, // Connection options for reference
+		tableList : {}, // List of available tables
+		procedureList : {}, // List of available procedures
+		connectionIndex : -1 // Index of connection in ActiveConnections
+	}, self = this; // Reference for use in callbacks etc.
 
-vExports.Connect = function(pOptions, pCallBackSuccess, pCallBackError) {
-	vConnectionOptions = pOptions;
-	vExports.Close();
-	vConnection = MySQL.createConnection(vConnectionOptions);
+	///////////////////////////////////////////////////////////
+	// Public functions
+	self.Connect = function(pCallBackError, pCallBackSuccess) {
+		priv.connection = MySQL.createConnection(priv.options);
 
-	vConnection.connect(function(pError){
-		if(pError){
-			pCallBackError("Connection error: " + pError);
-		}
+		priv.connection.connect(function(pError){
+			if(pError){
+				pCallBackError("Connection error: " + pError);
+			}else{
+				var vTablesDone = false, vProcsDone = false;
 
-		pCallBackSuccess("success");
-	});
-};
+				Query("SHOW Tables;", null, function(pResultSet){
+					pResultSet.Rows.forEach(function(pRow, pRowIndex){
+						priv.tableList[pRow[pResultSet.Columns[0]]] = {
+							name: pRow[pResultSet.Columns[0]] //Column name will be like "Tables_in_tablename"
+						};
+					});
+					if(vProcsDone){
+						ConnectionSuccess(pCallBackSuccess);
+					} else{
+						vTablesDone = true;
+					}
+				});
 
-vExports.Select = function(pTable, pColumns, pFilter, pCallBackSuccess, pCallBackError){
-	GetTableList(function(){
-		vTableName = Helper.VerifyField(pTable, vTableList);
-		if(!vTableName) return pCallBackError("Invalid table name!");
+				Query("SHOW PROCEDURE STATUS;", null, function(pResultSet){
+					pResultSet.Rows.forEach(function(pRow, pRowIndex){
+						priv.procedureList[pRow.Name] = {
+							name: pRow.Name
+						};
+					});
+					if(vTablesDone){
+						ConnectionSuccess(pCallBackSuccess);
+					} else{
+						vProcsDone = true;
+					}
+				});
+			}
+		});
+	};
 
-		GetColumList(vTableName, function(){
+	self.Select = function(pTable, pColumns, pFilter, pCallBackError, pCallBackSuccess){
+		GetColumList(pTable, pCallBackError, function(vTable){
 			var vFilter = "";
 			if(pFilter){
 				try {
-					vFilter = " WHERE " + FormatFilter(vTableName, pFilter);
+					vFilter = " WHERE " + FormatFilter(vTable, pFilter);
 				} catch (e) {
 					return pCallBackError(e);
 				}
@@ -45,7 +71,7 @@ vExports.Select = function(pTable, pColumns, pFilter, pCallBackSuccess, pCallBac
 
 
 			if(pColumns === "*"){
-				Query("SELECT * FROM " + vTableName + vFilter, pCallBackSuccess, pCallBackError);
+				Query("SELECT * FROM " + vTable.name + vFilter, pCallBackError, pCallBackSuccess);
 
 			}else {
 				if(typeof pColumns === "string") {
@@ -54,54 +80,43 @@ vExports.Select = function(pTable, pColumns, pFilter, pCallBackSuccess, pCallBac
 
 				var vColumns = [];
 				pColumns.forEach(function(pColumn){
-					var vColumn = Helper.VerifyField(pColumn, vTableColumns[vTableName]);
+					var vColumn = Helper.VerifyField(pColumn, vTable.columns);
 					if(!vColumn) return pCallBackError("Invalid column!");
 					vColumns[vColumns.length] = vColumn;
 				});
-				Query("SELECT " + vColumns.join(", ") + " FROM " + vTableName + vFilter, pCallBackSuccess, pCallBackError);
+				Query("SELECT " + vColumns.join(", ") + " FROM " + vTable.name + vFilter, pCallBackError, pCallBackSuccess);
 			}
 		});
-	});
-};
+	};
 
-vExports.Insert = function(pTable, pData, pCallBackSuccess, pCallBackError){
-	GetTableList(function(){
-		vTableName = Helper.VerifyField(pTable, vTableList);
-		if(!vTableName) return pCallBackError("Invalid table name!");
-
-		GetColumList(vTableName, function(){
-
+	self.Insert = function(pTable, pData, pCallBackError, pCallBackSuccess){
+		GetColumList(pTable, pCallBackError, function(vTable){
 			var vKeys = Object.keys(pData);
 
 			var vColumns = [];
 			vKeys.forEach(function(pColumn){
-				var vColumn = Helper.VerifyField(pColumn, vTableColumns[vTableName]);
+				var vColumn = Helper.VerifyField(pColumn, vTable.columns);
 				if(!vColumn) return pCallBackError("Invalid column!");
 				vColumns[vColumns.length] = vColumn;
 			});
 			var vData = [];
 			vColumns.forEach(function(pColumn){
-				vData[vData.length] = vConnection.escape(pData[pColumn]);
+				vData[vData.length] = priv.connection.escape(pData[pColumn]);
 			});
 
-			var sql = "INSERT INTO " + vTableName + "(" + vColumns.join(", ") + ")" +
+			var sql = "INSERT INTO " + vTable.name + "(" + vColumns.join(", ") + ")" +
 						"VALUES('" + vData.join("', '") + "')";
 
-			Query(sql, pCallBackSuccess, pCallBackError);
+			Query(sql, pCallBackError, pCallBackSuccess);
 		});
-	});
-};
+	};
 
-vExports.Update = function(pTable, pData, pFilter, pCallBackSuccess, pCallBackError){
-	GetTableList(function(){
-		vTableName = Helper.VerifyField(pTable, vTableList);
-		if(!vTableName) return pCallBackError("Invalid table name!");
-
-		GetColumList(vTableName, function(){
+	self.Update = function(pTable, pData, pFilter, pCallBackError, pCallBackSuccess){
+		GetColumList(pTable, pCallBackError, function(vTable){
 			var vFilter = "";
 			if(pFilter){
 				try {
-					vFilter = " WHERE " + FormatFilter(vTableName, pFilter);
+					vFilter = " WHERE " + FormatFilter(vTable, pFilter);
 				} catch (e) {
 					return pCallBackError(e);
 				}
@@ -109,33 +124,28 @@ vExports.Update = function(pTable, pData, pFilter, pCallBackSuccess, pCallBackEr
 				return pCallBackError("Please specify a where clause when updating");
 			}
 
-			var vQuery = "UPDATE " + vTableName + " SET ";
+			var vQuery = "UPDATE " + vTable.name + " SET ";
 			var vKeys = Object.keys(pData);
 			var vColumns = [];
 			for(var i = 0; i < vKeys.length; i++){
-				var vColumn = Helper.VerifyField(vKeys[i], vTableColumns[vTableName]);
+				var vColumn = Helper.VerifyField(vKeys[i], vTable.columns);
 				if(!vColumn) return pCallBackError("Invalid column!");
-				vQuery += vColumn + " = " + vConnection.escape(pData[vColumn]);
+				vQuery += vColumn + " = " + priv.connection.escape(pData[vColumn]);
 				if(i < vKeys.length-1) vQuery += ", ";
 			}
 
 			vQuery += vFilter;
 
-			Query(vQuery, pCallBackSuccess, pCallBackError);
+			Query(vQuery, pCallBackError, pCallBackSuccess);
 		});
-	});
-};
+	};
 
-vExports.Delete = function(pTable, pFilter, pCallBackSuccess, pCallBackError){
-	GetTableList(function(){
-		vTableName = Helper.VerifyField(pTable, vTableList);
-		if(!vTableName) return pCallBackError("Invalid table name!");
-
-		GetColumList(vTableName, function(){
+	self.Delete = function(pTable, pFilter, pCallBackError, pCallBackSuccess){
+		GetColumList(pTable, pCallBackError, function(vTable){
 			var vFilter = "";
 			if(pFilter){
 				try {
-					vFilter = " WHERE " + FormatFilter(vTableName, pFilter);
+					vFilter = " WHERE " + FormatFilter(vTable, pFilter);
 				} catch (e) {
 					return pCallBackError(e);
 				}
@@ -143,106 +153,167 @@ vExports.Delete = function(pTable, pFilter, pCallBackSuccess, pCallBackError){
 				return pCallBackError("Please specify a where clause when deleting");
 			}
 
-			var vQuery = "DELETE FROM " + vTableName + vFilter;
+			var vQuery = "DELETE FROM " + vTable.name + vFilter;
 
-			Query(vQuery, pCallBackSuccess, pCallBackError);
+			Query(vQuery, pCallBackError, pCallBackSuccess);
 		});
-	});
-};
-
-vExports.Execute = function(pProcedure, pCallBackSuccess, pCallBackError){
-	throw new Error("Not implemented!");
-};
-
-vExports.Close = function(){
-	if(vConnection){
-		vConnection.end();
-		vConnection = null;
-	}
-};
-
-///////////////////////////////////////////////////////////
-// Private functions
-function GetTableList(pCallBackSuccess){
-	if(!vTableList){
-		Query("SHOW TABLES", function(pResultSet){
-			vTableList = [];
-
-			pResultSet.Rows.forEach(function(pRow, pRowIndex){
-				pResultSet.Columns.forEach(function(pColumn, pColumnIndex){
-					vTableList[vTableList.length] = pRow[pColumn]; //Column name will be like "Tables_in_tablename"
-				});
-			});
-			if(pCallBackSuccess)pCallBackSuccess();
-		});
-	}else{
-		if(pCallBackSuccess)pCallBackSuccess();
-	}
-}
-
-function GetColumList(pTable, pCallBackSuccess){
-	if(vTableColumns[pTable]){
-		pCallBackSuccess();
-	}else {
-		Query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '" +
-	 			vConnectionOptions.database + "' AND `TABLE_NAME`='" + pTable + "';", function(pResultSet){
-
-			vDef = [];
-			pResultSet.Rows.forEach(function(pRow, pRowIndex){
-				vDef[vDef.length] = pRow.COLUMN_NAME;
-			});
-			vTableColumns[pTable] = vDef;
-			pCallBackSuccess();
-		});
-
-	}
-}
-
-function Query(pQuery, pCallBackSuccess, pCallBackError){
-	vConnection.query(pQuery, function(pError, pRows, pFields){
-		if(pError){
-			pCallBackError("Table listing error: " + pError);
-		}else{
-			pCallBackSuccess(CreateResultSet(pRows, pFields));
-		}
-	});
-}
-
-function CreateResultSet(pRows, pFields){
-	var vRS = {
-		Rows: pRows,
-		Columns: []
 	};
-	if(pFields){
-		pFields.forEach(function(pColumn, pColumnIndex){
-			vRS.Columns[vRS.Columns.length] = pColumn.name;
+
+	self.Execute = function(pProcedureName, pParameters, pCallBackError, pCallBackSuccess){
+		GetProcParams(pProcedureName, pCallBackError, function(vProcedure){
+			throw new Error("This isn't done yet...");
+			//vProcedure.parameters
+
+			//BEGIN OLD
+			/*var vKeys = Object.keys(pData);
+
+			var vColumns = [];
+			vKeys.forEach(function(pColumn){
+				var vColumn = Helper.VerifyField(pColumn, vTable.columns);
+				if(!vColumn) return pCallBackError("Invalid column!");
+				vColumns[vColumns.length] = vColumn;
+			});
+			var vData = [];
+			vColumns.forEach(function(pColumn){
+				vData[vData.length] = priv.connection.escape(pData[pColumn]);
+			});*/
+			//END OLD
+
+			var vKeys = Object.keys(pParameters);
+
+			var vParameters = [];
+			vKeys.forEach(function(pParamName){
+				var vParam = Helper.VerifyField(pParam, vProcedure.parameters);
+				if(!vParam) return pCallBackError("Invalid parameter!");
+				vParameters[vParameters.length] = vParam;
+			});
+
+			var vData = [];
+			vParameters.forEach(function(pColumn){
+				vData[vData.length] = priv.connection.escape(pData[pColumn]);
+			});
+
+			var sql = "CALL " + vProcedure.name + "('" + vData.join("', '") + "');";
+
+			Query(sql, pCallBackError, pCallBackSuccess);
+
+			pCallBackSuccess("Proc success!");
+		});
+	};
+
+	self.Close = function(){
+		// TODO: Do something about closing all connections/not filling up extreme amounts of ActiveConnections
+		if(priv.connection){
+			priv.connection.end();
+			priv.connection = null;
+		}
+	};
+
+
+	///////////////////////////////////////////////////////////
+	// Private functions
+	function ConnectionSuccess(pCallBack){
+		priv.connectionIndex = ActiveConnections.length;
+		ActiveConnections[priv.connectionIndex] = self;
+		pCallBack("Connected");
+	}
+
+	function GetColumList(pTableName, pCallBackError, pCallBackSuccess){
+		vTable = priv.tableList[pTableName];
+		if(!vTable) return pCallBackError("Invalid table name!");
+
+		if(vTable.columns){
+			pCallBackSuccess(vTable);
+		}else {
+			Query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '" +
+		 			priv.options.database + "' AND `TABLE_NAME`='" + vTable.name + "';", null, function(pResultSet){
+
+				vTable.columns = [];
+				pResultSet.Rows.forEach(function(pRow, pRowIndex){
+					vTable.columns[vTable.columns.length] = pRow.COLUMN_NAME;
+				});
+				pCallBackSuccess(vTable);
+			});
+
+		}
+	}
+
+	function GetProcParams(pProcName, pCallBackError, pCallBackSuccess){
+		var vProc = priv.procedureList[pProcName];
+		if(!vProc) return pCallBackError("Invalid proc name!");
+
+		if(vProc.parameters){
+			pCallBackSuccess(vProc);
+		}else {
+			Query("SELECT PARAMETER_NAME FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_SCHEMA = '" +
+		 			priv.options.database + "' AND `SPECIFIC_NAME`='" + vProc.name + "';", null, function(pResultSet){
+
+				vProc.parameters = [];
+				pResultSet.Rows.forEach(function(pRow, pRowIndex){
+					vProc.parameters[vProc.parameters.length] = pRow.PARAMETER_NAME;
+				});
+				pCallBackSuccess(vProc);
+			});
+
+		}
+	}
+
+	function Query(pQuery, pCallBackError, pCallBackSuccess){
+		priv.connection.query(pQuery, function(pError, pRows, pFields){
+			if(pError){
+				if(pCallBackError)pCallBackError("Table listing error: " + pError);
+				else console.log(pError);
+			}else{
+				pCallBackSuccess(CreateResultSet(pRows, pFields));
+			}
 		});
 	}
-	return vRS;
+
+	function CreateResultSet(pRows, pFields){
+		var vRS = {
+			Rows: pRows,
+			Columns: []
+		};
+		if(pFields){
+			pFields.forEach(function(pColumn, pColumnIndex){
+				vRS.Columns[vRS.Columns.length] = pColumn.name;
+			});
+		}
+		return vRS;
+	}
+
+	function FormatFilter(pTable, pFilter, pRecurse){
+		if(pFilter.Column){
+			vColumn = Helper.VerifyField(pFilter.Column, pTable.columns);
+			if(!vColumn) throw new Error("Invalid column!");
+			vOperator = Helper.VerifyOperator(pFilter.Operator);
+			if(!vOperator) throw new Error("Invalid Operator!");
+			// Build string
+			return vColumn + " " + vOperator + " " + priv.connection.escape(pFilter.Value);
+		}else if(pFilter.Combo){
+			if(!pRecurse) pRecurse = 0;
+			if(pRecurse > 100) throw new Error("Max amount of filter recursing reaced!");
+			pRecurse ++;
+			vCombo = Helper.VerifyCombo(pFilter.Combo);
+			// Recurse each
+			var vFilterString = "(";
+			for(var i = 0; i < pFilter.Items.length; i++){
+				vFilterString += FormatFilter(pTable, pFilter.Items[i], pRecurse);
+				if(i < pFilter.Items.length-1) vFilterString += " " + vCombo + " ";
+			}
+			return vFilterString + ")";
+		}else{
+			throw new Error("Invalid filter!");
+		}
+	}
+
 }
 
-function FormatFilter(pTableName, pFilter, pRecurse){
-	if(pFilter.Column){
-		vColumn = Helper.VerifyField(pFilter.Column, vTableColumns[pTableName]);
-		if(!vColumn) throw new Error("Invalid column!");
-		vOperator = Helper.VerifyOperator(pFilter.Operator);
-		if(!vOperator) throw new Error("Invalid Operator!");
-		// Build string
-		return vColumn + " " + vOperator + " " + vConnection.escape(pFilter.Value);
-	}else if(pFilter.Combo){
-		if(!pRecurse) pRecurse = 0;
-		if(pRecurse > 100) throw new Error("Max amount of filter recursing reaced!");
-		pRecurse ++;
-		vCombo = Helper.VerifyCombo(pFilter.Combo);
-		// Recurse each
-		var vFilterString = "(";
-		for(var i = 0; i < pFilter.Items.length; i++){
-			vFilterString += FormatFilter(pTableName, pFilter.Items[i], pRecurse);
-			if(i < pFilter.Items.length-1) vFilterString += " " + vCombo + " ";
+module.exports = {
+	Connection : SimSaveConnection,
+	CloseAll : function(){
+		for(var i = 0; i < ActiveConnections.length; i++){
+			ActiveConnections[i].Close();
 		}
-		return vFilterString + ")";
-	}else{
-		throw new Error("Invalid filter!");
 	}
-}
-module.exports = vExports;
+};

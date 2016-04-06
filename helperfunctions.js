@@ -1,12 +1,11 @@
 module.exports = {
 	VerifyField: function(pString, pArray){
-		var vString = null;
-		pArray.forEach(function(pElem){
-			if(pString === pElem){
-				vString = pElem;
+		for(var i = 0; i < pArray.length; i++){
+			if(pString === pArray[i]){
+				return pArray[i];
 			}
-		});
-		return vString;
+		}
+		return null;
 	},
 
 	VerifyOperator: function(pOperator){
@@ -34,7 +33,7 @@ module.exports = {
 		}
 	},
 
-	VerifyCombo(pCombo){
+	VerifyCombo: function(pCombo){
 		switch (pCombo) {
 			case "AND":
 				return "AND";
@@ -44,4 +43,4 @@ module.exports = {
 				return null;
 		}
 	}
-}
+};

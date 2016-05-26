@@ -29,30 +29,24 @@ function SimSaveConnection(pOptions){
 			}else{
 				var vTablesDone = false, vProcsDone = false;
 
-				Query("SHOW Tables;", null, function(pResultSet){
+				Query("SHOW Tables;", false, null, function(pResultSet){
 					pResultSet.Rows.forEach(function(pRow, pRowIndex){
 						priv.tableList[pRow[pResultSet.Columns[0]]] = {
 							name: pRow[pResultSet.Columns[0]] //Column name will be like "Tables_in_tablename"
 						};
 					});
-					if(vProcsDone){
-						ConnectionSuccess(pCallBackSuccess);
-					} else{
-						vTablesDone = true;
-					}
+					if(vProcsDone) ConnectionSuccess(pCallBackSuccess);
+					else vTablesDone = true;
 				});
 
-				Query("SHOW PROCEDURE STATUS;", null, function(pResultSet){
+				Query("SHOW PROCEDURE STATUS;", false, null, function(pResultSet){
 					pResultSet.Rows.forEach(function(pRow, pRowIndex){
 						priv.procedureList[pRow.Name] = {
 							name: pRow.Name
 						};
 					});
-					if(vTablesDone){
-						ConnectionSuccess(pCallBackSuccess);
-					} else{
-						vProcsDone = true;
-					}
+					if(vTablesDone) ConnectionSuccess(pCallBackSuccess);
+					else vProcsDone = true;
 				});
 			}
 		});
@@ -60,6 +54,7 @@ function SimSaveConnection(pOptions){
 
 	self.Select = function(pTable, pColumns, pFilter, pCallBackError, pCallBackSuccess){
 		GetColumList(pTable, pCallBackError, function(vTable){
+
 			var vFilter = "";
 			if(pFilter){
 				try {
@@ -69,9 +64,8 @@ function SimSaveConnection(pOptions){
 				}
 			}
 
-
 			if(pColumns === "*"){
-				Query("SELECT * FROM " + vTable.name + vFilter, pCallBackError, pCallBackSuccess);
+				Query("SELECT * FROM " + vTable.name + vFilter, true, pCallBackError, pCallBackSuccess);
 
 			}else {
 				if(typeof pColumns === "string") {
@@ -84,7 +78,7 @@ function SimSaveConnection(pOptions){
 					if(!vColumn) return pCallBackError("Invalid column!");
 					vColumns[vColumns.length] = vColumn;
 				});
-				Query("SELECT " + vColumns.join(", ") + " FROM " + vTable.name + vFilter, pCallBackError, pCallBackSuccess);
+				Query("SELECT " + vColumns.join(", ") + " FROM " + vTable.name + vFilter, true, pCallBackError, pCallBackSuccess);
 			}
 		});
 	};
@@ -107,7 +101,7 @@ function SimSaveConnection(pOptions){
 			var sql = "INSERT INTO " + vTable.name + "(" + vColumns.join(", ") + ")" +
 						"VALUES('" + vData.join("', '") + "')";
 
-			Query(sql, pCallBackError, pCallBackSuccess);
+			Query(sql, false, pCallBackError, pCallBackSuccess);
 		});
 	};
 
@@ -124,19 +118,19 @@ function SimSaveConnection(pOptions){
 				return pCallBackError("Please specify a where clause when updating");
 			}
 
-			var vQuery = "UPDATE " + vTable.name + " SET ";
+			var vSQL = "UPDATE " + vTable.name + " SET ";
 			var vKeys = Object.keys(pData);
 			var vColumns = [];
 			for(var i = 0; i < vKeys.length; i++){
 				var vColumn = Helper.VerifyField(vKeys[i], vTable.columns);
 				if(!vColumn) return pCallBackError("Invalid column!");
-				vQuery += vColumn + " = " + priv.connection.escape(pData[vColumn]);
-				if(i < vKeys.length-1) vQuery += ", ";
+				vSQL += vColumn + " = " + priv.connection.escape(pData[vColumn]);
+				if(i < vKeys.length-1) vSQL += ", ";
 			}
 
-			vQuery += vFilter;
+			vSQL += vFilter;
 
-			Query(vQuery, pCallBackError, pCallBackSuccess);
+			Query(vSQL, false, pCallBackError, pCallBackSuccess);
 		});
 	};
 
@@ -153,51 +147,31 @@ function SimSaveConnection(pOptions){
 				return pCallBackError("Please specify a where clause when deleting");
 			}
 
-			var vQuery = "DELETE FROM " + vTable.name + vFilter;
+			var vSQL = "DELETE FROM " + vTable.name + vFilter;
 
-			Query(vQuery, pCallBackError, pCallBackSuccess);
+			Query(vSQL, false, pCallBackError, pCallBackSuccess);
 		});
 	};
 
 	self.Execute = function(pProcedureName, pParameters, pCallBackError, pCallBackSuccess){
 		GetProcParams(pProcedureName, pCallBackError, function(vProcedure){
-			throw new Error("This isn't done yet...");
-			//vProcedure.parameters
-
-			//BEGIN OLD
-			/*var vKeys = Object.keys(pData);
-
-			var vColumns = [];
-			vKeys.forEach(function(pColumn){
-				var vColumn = Helper.VerifyField(pColumn, vTable.columns);
-				if(!vColumn) return pCallBackError("Invalid column!");
-				vColumns[vColumns.length] = vColumn;
-			});
-			var vData = [];
-			vColumns.forEach(function(pColumn){
-				vData[vData.length] = priv.connection.escape(pData[pColumn]);
-			});*/
-			//END OLD
-
 			var vKeys = Object.keys(pParameters);
 
 			var vParameters = [];
 			vKeys.forEach(function(pParamName){
-				var vParam = Helper.VerifyField(pParam, vProcedure.parameters);
+				var vParam = Helper.VerifyField(pParamName, vProcedure.parameters);
 				if(!vParam) return pCallBackError("Invalid parameter!");
 				vParameters[vParameters.length] = vParam;
 			});
 
 			var vData = [];
 			vParameters.forEach(function(pColumn){
-				vData[vData.length] = priv.connection.escape(pData[pColumn]);
+				vData[vData.length] = priv.connection.escape(pParameters[pColumn]);
 			});
 
-			var sql = "CALL " + vProcedure.name + "('" + vData.join("', '") + "');";
+			var sql = "CALL " + vProcedure.name + "(" + vData.join(", ") + ");";
 
-			Query(sql, pCallBackError, pCallBackSuccess);
-
-			pCallBackSuccess("Proc success!");
+			Query(sql, true, pCallBackError, pCallBackSuccess);
 		});
 	};
 
@@ -226,7 +200,7 @@ function SimSaveConnection(pOptions){
 			pCallBackSuccess(vTable);
 		}else {
 			Query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '" +
-		 			priv.options.database + "' AND `TABLE_NAME`='" + vTable.name + "';", null, function(pResultSet){
+		 			priv.options.database + "' AND `TABLE_NAME`='" + vTable.name + "';", false, null, function(pResultSet){
 
 				vTable.columns = [];
 				pResultSet.Rows.forEach(function(pRow, pRowIndex){
@@ -246,7 +220,7 @@ function SimSaveConnection(pOptions){
 			pCallBackSuccess(vProc);
 		}else {
 			Query("SELECT PARAMETER_NAME FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_SCHEMA = '" +
-		 			priv.options.database + "' AND `SPECIFIC_NAME`='" + vProc.name + "';", null, function(pResultSet){
+		 			priv.options.database + "' AND `SPECIFIC_NAME`='" + vProc.name + "';", false, null, function(pResultSet){
 
 				vProc.parameters = [];
 				pResultSet.Rows.forEach(function(pRow, pRowIndex){
@@ -258,13 +232,18 @@ function SimSaveConnection(pOptions){
 		}
 	}
 
-	function Query(pQuery, pCallBackError, pCallBackSuccess){
+	function Query(pQuery, pIsProcedure, pCallBackError, pCallBackSuccess){
 		priv.connection.query(pQuery, function(pError, pRows, pFields){
 			if(pError){
-				if(pCallBackError)pCallBackError("Table listing error: " + pError);
+				if(pCallBackError)pCallBackError("Query error: " + pError);
 				else console.log(pError);
 			}else{
-				pCallBackSuccess(CreateResultSet(pRows, pFields));
+				if(pIsProcedure){
+					pCallBackSuccess(pRows, pFields);
+				}else {
+					pCallBackSuccess(CreateResultSet(pRows, pFields));
+				}
+
 			}
 		});
 	}
@@ -276,7 +255,7 @@ function SimSaveConnection(pOptions){
 		};
 		if(pFields){
 			pFields.forEach(function(pColumn, pColumnIndex){
-				vRS.Columns[vRS.Columns.length] = pColumn.name;
+				vRS.Columns[vRS.Columns.length] = pColumn?pColumn.name:"no-no-field";
 			});
 		}
 		return vRS;

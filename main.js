@@ -15,7 +15,8 @@ function SimSaveConnection(pOptions){
 		options : pOptions, // Connection options for reference
 		tableList : {}, // List of available tables
 		procedureList : {}, // List of available procedures
-		connectionIndex : -1 // Index of connection in ActiveConnections
+		connectionIndex : -1, // Index of connection in ActiveConnections
+		connected : false // Used to check if connection is active
 	}, self = this; // Reference for use in callbacks etc.
 
 	///////////////////////////////////////////////////////////
@@ -180,7 +181,12 @@ function SimSaveConnection(pOptions){
 		if(priv.connection){
 			priv.connection.end();
 			priv.connection = null;
+			priv.connected = false;
 		}
+	};
+
+	sef.IsConnected = function(){
+		return priv.connected;
 	};
 
 
@@ -189,6 +195,7 @@ function SimSaveConnection(pOptions){
 	function ConnectionSuccess(pCallBack){
 		priv.connectionIndex = ActiveConnections.length;
 		ActiveConnections[priv.connectionIndex] = self;
+		priv.connected = true;
 		pCallBack("Connected");
 	}
 

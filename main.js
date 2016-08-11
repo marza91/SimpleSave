@@ -185,7 +185,7 @@ function SimSaveConnection(pOptions){
 		}
 	};
 
-	sef.IsConnected = function(){
+	self.IsConnected = function(){
 		return priv.connected;
 	};
 

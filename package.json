@@ -18,10 +18,6 @@
     "url": "https://github.com/marza91/SimpleSave/issues"
   },
   "homepage": "https://github.com/marza91/SimpleSave#readme",
-  "devDependencies": {
-    "chai": "^3.4.1",
-    "mocha": "^2.3.4"
-  },
   "dependencies": {
     "mysql": "^2.9.0"
   }

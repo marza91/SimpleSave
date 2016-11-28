@@ -12,7 +12,7 @@
     "simple",
     "safe"
   ],
-  "author": "Martin Vaaden <mavaaden@gmail.com> (http://www.raspianprime.com)",
+  "author": "Martin Vaaden <mavaaden@gmail.com>",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/marza91/SimpleSave/issues"
